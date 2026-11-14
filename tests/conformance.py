@@ -83,6 +83,78 @@ def why_not_decoded(line, templates):
     return "not decoded"
 
 
+#: how far past a refused line the DECODE check looks for the original line the next
+#: decoded event starts at.
+RESYNC_WINDOW = 10000
+
+
+def check_decode(encoded, originals, templates, timezone_offset_minutes):
+    """Decode every encoded line and compare it with the original lines it stands for.
+
+    Returns (lines rebuilt exactly, original lines consumed, failures). A line decode()
+    refuses stands for an unknown number of original lines, at least one: the cursor
+    moves past one original line for it, and the next decoded event is compared from the
+    first original line equal to its own first line, within RESYNC_WINDOW lines. Without
+    that, every line after a refusal was compared with the wrong original.
+    """
+    cursor = 0
+    ok = 0
+    failures = []
+    refused = False
+    for line in encoded:
+        rebuilt = decode(line, templates, timezone_offset_minutes=timezone_offset_minutes)
+        if rebuilt is None:
+            failures.append((line[:80], why_not_decoded(line, templates)))
+            cursor += 1
+            refused = True
+            continue
+        parts = rebuilt.split("\n")
+        if refused:
+            refused = False
+            for at in range(cursor, min(len(originals), cursor + RESYNC_WINDOW)):
+                if originals[at] == parts[0]:
+                    cursor = at
+                    break
+        matched = all(
+            cursor + n < len(originals) and originals[cursor + n] == part
+            for n, part in enumerate(parts)
+        )
+        if matched:
+            ok += 1
+        elif len(failures) < 3:
+            failures.append((line[:80], f"differs at original line {cursor}"))
+        cursor += len(parts)
+    return ok, cursor, failures
+
+
+def check_tokenizer(encoded, templates, timezone_offset_minutes):
+    """Every value of a decoded line must be a token of the line it rebuilds.
+
+    Returns (values that are tokens, values checked, lines checked, lines not decoded).
+    A line decode() refuses cannot be checked; it is counted, and the check does not
+    pass while any line is uncounted that way.
+    """
+    checked = 0
+    ok = 0
+    lines = 0
+    refused = 0
+    for line in encoded:
+        rebuilt = decode(line, templates, timezone_offset_minutes=timezone_offset_minutes)
+        if rebuilt is None:
+            refused += 1
+            continue
+        split = line[1:].find(",")
+        values = line[1 + split + 1 :].split(",")
+        segments, timestamps = parse_template(templates[line[1 : 1 + split]])
+        produced = {t.text for t in tokenize(rebuilt)}
+        # Timestamps are epochs, not tokens of the line, so skip their positions.
+        for value in values[timestamps:]:
+            checked += 1
+            ok += value in produced
+        lines += 1
+    return ok, checked, lines, refused
+
+
 def read_lines(path):
     text = path.read_text(encoding="utf-8")
     lines = text.split("\n")
@@ -109,24 +181,7 @@ def main():
     results = []
 
     # 1. DECODE
-    cursor = 0
-    ok = 0
-    failures = []
-    for line in encoded:
-        rebuilt = decode(line, templates, timezone_offset_minutes=SAMPLE_TZ_OFFSET_MINUTES)
-        if rebuilt is None:
-            failures.append((line[:80], why_not_decoded(line, templates)))
-            continue
-        parts = rebuilt.split("\n")
-        matched = all(
-            cursor + n < len(originals) and originals[cursor + n] == part
-            for n, part in enumerate(parts)
-        )
-        if matched:
-            ok += 1
-        elif len(failures) < 3:
-            failures.append((line[:80], f"differs at original line {cursor}"))
-        cursor += len(parts)
+    ok, cursor, failures = check_decode(encoded, originals, templates, SAMPLE_TZ_OFFSET_MINUTES)
     passed = ok == len(encoded) and cursor == len(originals)
     results.append(("DECODE      byte-identical reconstruction", f"{ok:,}/{len(encoded):,} lines, {cursor:,}/{len(originals):,} originals", passed))
     for line, why in failures[:3]:
@@ -137,23 +192,11 @@ def main():
     results.append(("TEMPLATE ID hash_template reproduces published hashes", f"{ok:,}/{len(templates):,}", ok == len(templates)))
 
     # 3. TOKENIZER: every published value must be a token of its original line.
-    checked = 0
-    ok = 0
-    cursor = 0
-    for line in encoded[:20000]:
-        rebuilt = decode(line, templates, timezone_offset_minutes=SAMPLE_TZ_OFFSET_MINUTES)
-        if rebuilt is None:
-            continue
-        split = line[1:].find(",")
-        values = line[1 + split + 1 :].split(",")
-        segments, timestamps = parse_template(templates[line[1 : 1 + split]])
-        produced = {t.text for t in tokenize(rebuilt)}
-        # Timestamps are epochs, not tokens of the line, so skip their positions.
-        for value in values[timestamps:]:
-            checked += 1
-            ok += value in produced
-        cursor += 1
-    results.append(("TOKENIZER   published values are tokens of the line", f"{ok:,}/{checked:,} values over {cursor:,} lines", ok == checked))
+    ok, checked, lines, refused = check_tokenizer(encoded[:20000], templates, SAMPLE_TZ_OFFSET_MINUTES)
+    detail = f"{ok:,}/{checked:,} values over {lines:,} lines"
+    if refused:
+        detail += f", {refused:,} lines not decoded and not checked"
+    results.append(("TOKENIZER   published values are tokens of the line", detail, ok == checked and refused == 0))
 
     # 4. BACK-REFS: distances stay inside the S4.3 bound and always resolve.
     worst = 0
