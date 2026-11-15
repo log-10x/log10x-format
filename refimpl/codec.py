@@ -513,14 +513,16 @@ def render_timestamp(value: str, fmt: str, timezone_offset_minutes: int = 0) -> 
             )
         elif ch == "d":
             out.append(f"{when.day:02d}" if run >= 2 else str(when.day))
-        elif ch == "H":
-            out.append(f"{when.hour:02d}")
-        elif ch == "h":
-            out.append(f"{when.hour % 12 or 12:02d}")
-        elif ch == "m":
-            out.append(f"{when.minute:02d}")
-        elif ch == "s":
-            out.append(f"{when.second:02d}")
+        elif ch in ("H", "h", "m", "s"):
+            # DateTimeFormatter: one letter writes the number without padding (5),
+            # more letters pad it to that width (05).
+            number = {
+                "H": when.hour,
+                "h": when.hour % 12 or 12,
+                "m": when.minute,
+                "s": when.second,
+            }[ch]
+            out.append(str(number).zfill(run) if run > 1 else str(number))
         elif ch == "S":
             out.append(nanos[:run])
         elif ch in ("Z", "z"):
