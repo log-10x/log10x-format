@@ -52,7 +52,8 @@ concatenating every token's text reproduces the line exactly.
 
 **[MEASURED]** caveat: 27 of the 28 characters occur in the published sample and none of
 them ever appears inside a value. TAB does not occur at all, so its membership rests on
-the encoder's configuration rather than on the data.
+the encoder's configuration rather than on the data. A producer may also join several
+tokens into one value (S2.3), and such a value holds delimiters other than `,`.
 
 **[STATED]** The set is configuration, not a constant. A producer may use a different
 one, and a different set gives different tokens, different templates and therefore
@@ -86,6 +87,25 @@ there are 377 literal `-1` runs and, in 6,922,512 values, no value equal to `-1`
 
 Verified: over 20,000 published encoded lines, all 927,267 non-timestamp values are
 tokens this rule produces from the corresponding original line.
+
+### S2.3 Values joined from several tokens
+
+**[STATED]** A producer may write a run of consecutive tokens as one value, with one `$` in
+the template where the run was. The Log10x encoder does this for two shapes, each behind an
+option that is off by default: an IPv4 address (`10.0.1.14`, option `ipv4SingleToken`) and a
+Windows path (`C:\Program Files\App\app.exe`, `\Device\HarddiskVolume2\x`, `\\host\share`,
+option `windowsPathSingleToken`). Which runs are joined is producer configuration, like the
+delimiter set of S2.1, so the same line gives a different template and template hash with the
+option on and off.
+
+A joined value obeys three rules:
+
+1. it is a run of whole tokens: it starts and ends where a token of the line starts and ends;
+2. the character after it is a delimiter, or its line ends there, as after a value of one
+   token;
+3. it never holds the value delimiter `,` (S8.1). A path that reaches a comma ends before it.
+
+A decoder needs nothing new for a joined value: it copies the value as it copies any other.
 
 ## S3. The symbol library
 
@@ -424,9 +444,9 @@ carrying an explicit zone field, which renders UTC regardless.
 These follow from S4.1 and are stated so that an implementation does not assume otherwise.
 
 1. **A value can never contain the value delimiter.** `,` is a token delimiter (S2), so
-   no token can contain it. The encoded line is safe to split on `,` only because of
-   this. An implementation that widens the token set must widen the
-   escaping to match, or the round trip breaks.
+   no token can contain it, and a value joined from several tokens ends before it (S2.3).
+   The encoded line is safe to split on `,` only because of this. An implementation that
+   widens the token set must widen the escaping to match, or the round trip breaks.
 2. **Zero values and one empty value are indistinguishable.** An encoded line always
    carries the delimiter after the template hash, so a line with no values is written
    `~<hash>,` and splits back into a single empty value. No published line has zero

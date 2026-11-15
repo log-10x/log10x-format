@@ -9,7 +9,8 @@ caches them under fixtures/otel-sample/, and runs four checks:
 
   1. DECODE      every published encoded line rebuilds its original bytes exactly
   2. TEMPLATE ID hash_template reproduces every published template hash
-  3. TOKENIZER   every published value is a token this tokenizer produces
+  3. TOKENIZER   every published value is a token this tokenizer produces, or a run of
+                 several tokens a producer joined into one value (spec S2.3)
   4. BACK-REFS   the published back-reference distances obey spec S4.3
 
 Check 1 is the load-bearing one: 159,454 encoded lines, 197,430 original lines, and the
@@ -27,7 +28,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from refimpl import decode, hash_template, tokenize  # noqa: E402
-from refimpl.codec import LINE_PREFIX, VALUE_DELIMITER, parse_template  # noqa: E402
+from refimpl.codec import LINE_PREFIX, TOKEN_DELIMITERS, VALUE_DELIMITER, parse_template  # noqa: E402
 
 BASE = "https://github.com/log-10x/config/releases/download/otel-sample-v1/"
 FILES = {
@@ -127,15 +128,36 @@ def check_decode(encoded, originals, templates, timezone_offset_minutes):
     return ok, cursor, failures
 
 
-def check_tokenizer(encoded, templates, timezone_offset_minutes):
-    """Every value of a decoded line must be a token of the line it rebuilds.
+def is_joined_value(value, line, tokens):
+    """spec S2.3. True when value is a run of several whole tokens of line, followed by a
+    delimiter or by the end of the line. tokens is tokenize(line)."""
+    starts = set()
+    position = 0
+    for token in tokens:
+        starts.add(position)
+        position += len(token.text)
+    ends = {start for start in starts if start} | {position}
+    at = line.find(value)
+    while at != -1:
+        end = at + len(value)
+        if at in starts and end in ends and (end == len(line) or line[end] in TOKEN_DELIMITERS):
+            return True
+        at = line.find(value, at + 1)
+    return False
 
-    Returns (values that are tokens, values checked, lines checked, lines not decoded).
-    A line decode() refuses cannot be checked; it is counted, and the check does not
-    pass while any line is uncounted that way.
+
+def check_tokenizer(encoded, templates, timezone_offset_minutes, stats=None):
+    """Every value of a decoded line must be a token of the line it rebuilds, or a run of
+    several of its tokens joined as one value (spec S2.3).
+
+    Returns (values that are tokens or joined runs, values checked, lines checked, lines
+    not decoded). A line decode() refuses cannot be checked; it is counted, and the check
+    does not pass while any line is uncounted that way. When stats is a dict, its "joined"
+    entry receives the number of joined values.
     """
     checked = 0
     ok = 0
+    joined = 0
     lines = 0
     refused = 0
     for line in encoded:
@@ -146,12 +168,19 @@ def check_tokenizer(encoded, templates, timezone_offset_minutes):
         split = line[1:].find(",")
         values = line[1 + split + 1 :].split(",")
         segments, timestamps = parse_template(templates[line[1 : 1 + split]])
-        produced = {t.text for t in tokenize(rebuilt)}
+        tokens = tokenize(rebuilt)
+        produced = {t.text for t in tokens}
         # Timestamps are epochs, not tokens of the line, so skip their positions.
         for value in values[timestamps:]:
             checked += 1
-            ok += value in produced
+            if value in produced:
+                ok += 1
+            elif is_joined_value(value, rebuilt, tokens):
+                ok += 1
+                joined += 1
         lines += 1
+    if stats is not None:
+        stats["joined"] = joined
     return ok, checked, lines, refused
 
 
@@ -192,8 +221,11 @@ def main():
     results.append(("TEMPLATE ID hash_template reproduces published hashes", f"{ok:,}/{len(templates):,}", ok == len(templates)))
 
     # 3. TOKENIZER: every published value must be a token of its original line.
-    ok, checked, lines, refused = check_tokenizer(encoded[:20000], templates, SAMPLE_TZ_OFFSET_MINUTES)
+    stats = {}
+    ok, checked, lines, refused = check_tokenizer(encoded[:20000], templates, SAMPLE_TZ_OFFSET_MINUTES, stats)
     detail = f"{ok:,}/{checked:,} values over {lines:,} lines"
+    if stats["joined"]:
+        detail += f", {stats['joined']:,} of them joined from several tokens"
     if refused:
         detail += f", {refused:,} lines not decoded and not checked"
     results.append(("TOKENIZER   published values are tokens of the line", detail, ok == checked and refused == 0))
