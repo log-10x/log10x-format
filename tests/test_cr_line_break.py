@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""A grouped event whose lines end with CR LF (spec S2.1, S8.4): CR is a delimiter, so a value
-that ends a line ends right before it.
+"""A grouped event whose lines end with CR LF or a CR alone (spec S2.1, S8.4): CR is a delimiter,
+so a value or a timestamp that ends a line ends right before it.
 
     python3 tests/test_cr_line_break.py
 
@@ -33,6 +33,11 @@ class CrLineBreak(unittest.TestCase):
         self.assertIn("4432", texts)
         self.assertIn("\r", texts)
         self.assertEqual("".join(texts), TEXT)
+
+    def test_a_lone_cr_and_a_timestamp_before_cr(self):
+        templates = {"p": "$ : $(yyyy-MM-dd'T'HH:mm:ss'Z')\rVersion : $\r\n\t%%$\rend"}
+        self.assertEqual(decode("~p,1488916587000,LastOriginatingChange,4,4433", templates),
+                         "LastOriginatingChange : 2017-03-07T19:56:27Z\rVersion : 4\r\n\t%%4433\rend")
 
     def test_the_value_before_cr_is_a_token_of_the_line(self):
         ok, checked, lines, refused = conformance.check_tokenizer([LINE], TEMPLATES, 0)

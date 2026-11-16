@@ -470,13 +470,15 @@ These follow from S4.1 and are stated so that an implementation does not assume 
 4. **One encoded line may carry several original lines.** A grouping step ahead of the
    encoder can merge a multi-line event, in which case decoding yields text containing
    newlines. In the published sample 197,430 lines encode to 159,454. The template joins
-   a line to the next with LF, or with CR LF where the line was read ending at a CR (a CR LF,
-   as in Windows event logs read from a file or sent by a forwarder, or a CR alone, which
-   therefore decodes as CR LF), so `$` can be followed by CR. The break that ends the event
-   is not part of its template. **[MEASURED]** In two Windows Security
-   samples, 3 of 662 events (754 lines) hold 27 CR LF breaks and each of 7,649 events
-   (15,298 lines) holds one; both decode byte for byte, and with CR in the delimiter
-   set the TOKENIZER check accepts every value of both.
+   a line to the next with the break the line was read with: LF; CR LF, as in Windows
+   event logs read from a file or sent by a forwarder; or a CR alone, with no LF after it.
+   So `$`, and a timestamp's closing `)`, can be followed by CR, and a CR can be followed
+   by any character. A CR alone still ends a line as LF does, so it never moves an event
+   boundary. The break that ends the event is not part of its template. **[MEASURED]** In
+   two Windows Security samples, 3 of 662 events (754 lines) hold 27 CR LF breaks and each
+   of 7,649 events (15,298 lines) holds one; both decode byte for byte, and with CR in the
+   delimiter set the TOKENIZER check accepts every value of both. A PowerShell script
+   block sample holds 7 CRs alone inside its events; they decode as written.
 
 ## S9. Conformance
 
