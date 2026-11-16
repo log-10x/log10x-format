@@ -388,7 +388,9 @@ def decode(
     """spec S6. Rebuild the original line from an encoded line and the template map.
 
     Returns None when the template is not in the map, and returns the input unchanged
-    when the line carries no encoding prefix.
+    when the line carries no encoding prefix. A line that is the prefix and a template
+    hash alone, with no value delimiter, is a line with no values (spec S8.2); with no
+    delimiter and no such template it is returned unchanged.
 
     timezone_offset_minutes is the zone the line was written in. It is needed because a
     timestamp is carried as an epoch, so a format with no zone field renders in local
@@ -399,7 +401,11 @@ def decode(
     body = encoded_line[len(LINE_PREFIX) :]
     split = body.find(VALUE_DELIMITER)
     if split == -1:
-        return encoded_line
+        # spec S8.2: an event whose template has no value slot is written as the hash
+        # alone. Anything else without a delimiter is not an encoded line.
+        if body not in templates:
+            return encoded_line
+        split = len(body)
 
     template = templates.get(body[:split])
     if template is None:
