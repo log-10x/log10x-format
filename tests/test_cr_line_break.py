@@ -39,6 +39,15 @@ class CrLineBreak(unittest.TestCase):
         self.assertEqual(decode("~p,1488916587000,LastOriginatingChange,4,4433", templates),
                          "LastOriginatingChange : 2017-03-07T19:56:27Z\rVersion : 4\r\n\t%%4433\rend")
 
+    def test_a_value_that_is_a_cr(self):
+        templates = {"s": "Message=$ new process has been created.\n$\nCreator Subject:\n\tSecurity ID:\t\t$\\Administrator"}
+        compact = "~s,A,\r,ATTACKRANGE\n~s,A,\r,X\n"
+        lines = compact.split("\n")[:-1]  # S4.1: lines end at LF only
+        self.assertEqual(len(lines), 2)
+        self.assertEqual(decode(lines[0], templates),
+                         "Message=A new process has been created.\n\r\nCreator Subject:\n\tSecurity ID:\t\tATTACKRANGE\\Administrator")
+        self.assertEqual(len(compact.splitlines()), 4)  # a reader that ends lines at CR cuts both
+
     def test_the_value_before_cr_is_a_token_of_the_line(self):
         ok, checked, lines, refused = conformance.check_tokenizer([LINE], TEMPLATES, 0)
         self.assertEqual((ok, checked, lines, refused), (2, 2, 1, 0))

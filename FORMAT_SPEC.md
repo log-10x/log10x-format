@@ -53,9 +53,12 @@ concatenating every token's text reproduces the line exactly.
 **[MEASURED]** caveat: 27 of the 28 characters other than CR occur in the published
 sample and none of them ever appears inside a value. TAB does not occur at all, so its
 membership rests on the encoder's configuration rather than on the data. CR does not occur
-in the published sample either; it reaches an encoded event only in the line break between
-two lines of a grouped event (S8.4): a line ends before its line break, so a value can end
-right before a CR and never holds one. A producer may also join several
+in the published sample either. It reaches an encoded event in the line break between two
+lines of a grouped event (S8.4), where a line ends before its line break, so a value can end
+right before a CR. **[MEASURED]** A value can also hold a CR: the Receiver, reading a
+forwarder's record, keeps a line of the record that is a CR alone (a Windows blank line
+whose CR the forwarder kept) as the value `\r`, as in the template
+`... created.\n$\nCreator Subject: ...` with that value. A producer may also join several
 tokens into one value (S2.3), and such a value holds delimiters other than `,`.
 
 **[STATED]** The set is configuration, not a constant. A producer may use a different
@@ -195,6 +198,10 @@ difference.
 
 `~` marks the line as encoded. The delimiter is `,`. Values appear in the order the
 template consumes them.
+
+Encoded lines are separated by LF. A CR inside a line is data, since a value can hold one
+(S2.1), so a reader splits lines at LF only: a reader that also ends a line at CR, as many
+line readers do by default, cuts such a line in two.
 
 A line that does not begin with `~` is not encoded and passes through untouched.
 
