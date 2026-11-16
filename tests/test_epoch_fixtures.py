@@ -3,9 +3,10 @@
 
     python3 tests/test_epoch_fixtures.py
 
-fixtures/epoch.jsonl holds 4 records {note, text, encoded, template_hash, template, pattern,
-value, time_ns}, the encoder's output for four audit and logfmt lines: two with a time in
-seconds with a fraction ($(+%s.%f)) and their compact lines, and the unchanged neighbours
+fixtures/epoch.jsonl holds 5 records {note, text, encoded, template_hash, template, pattern,
+value, time_ns}, the encoder's output: three lines with a time in seconds with a fraction
+($(+%s.%f)) and their compact lines (an audit record, a logfmt line, and a Kubernetes
+container log line whose escaped JSON holds the slot), and the unchanged neighbours
 $(+%s.%N) and $(+%s) (template and hash only). Checks: the template hash, byte-identical
 decode, and the event time read from the value. Offline, under a second.
 """
@@ -30,7 +31,7 @@ class EpochFixtures(unittest.TestCase):
 
     def test_decode_is_byte_identical(self):
         lines = [r for r in RECORDS if r["encoded"]]
-        self.assertEqual(len(lines), 2)
+        self.assertEqual(len(lines), 3)
         for r in lines:
             self.assertEqual(decode(r["encoded"], {r["template_hash"]: r["template"]}), r["text"], r["note"])
 
