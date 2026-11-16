@@ -5,6 +5,7 @@ from .codec import (
     SymbolLibrary,
     decode,
     encode,
+    epoch_time_ns,
     hash_pattern,
     hash_template,
     token_hash,
@@ -13,6 +14,6 @@ from .codec import (
 from .library import load as load_library
 
 __all__ = [
-    "EMPTY_PATTERN_HASH_TOTAL", "Encoded", "SymbolLibrary", "decode", "encode",
+    "EMPTY_PATTERN_HASH_TOTAL", "Encoded", "SymbolLibrary", "decode", "encode", "epoch_time_ns",
     "hash_pattern", "hash_template", "token_hash", "tokenize", "load_library",
 ]
