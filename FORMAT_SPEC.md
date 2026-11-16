@@ -100,7 +100,14 @@ option on and off.
 
 A joined value obeys three rules:
 
-1. it is a run of whole tokens: it starts and ends where a token of the line starts and ends;
+1. it is a run of whole tokens: it starts and ends where a token of the line starts and ends,
+   with two exceptions at the start of an IPv4 address. After a `-` that S2.2 would absorb into
+   the address's first number (`-10.0.1.14`, `10.0.0.1-10.0.1.14`), and after the letter `t`,
+   `n` or `r` of an escape that follows a `\` (`\t10.0.1.14` inside a JSON string), the
+   encoder keeps the sign or the letter in the template and starts the value at the first
+   digit. **[MEASURED]** Of 9,181 values in the 2,664 synthetic lines `fixtures/joined.jsonl`
+   is drawn from, encoded one event per line with `ipv4SingleToken`, 96 start this way, 48
+   after a sign and 48 after an escape letter;
 2. the character after it is a delimiter, or its line ends there, as after a value of one
    token;
 3. it never holds the value delimiter `,` (S8.1). A path that reaches a comma ends before it.
