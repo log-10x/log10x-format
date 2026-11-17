@@ -130,13 +130,25 @@ def check_decode(encoded, originals, templates, timezone_offset_minutes):
 
 def is_joined_value(value, line, tokens):
     """spec S2.3. True when value is a run of several whole tokens of line, followed by a
-    delimiter or by the end of the line. tokens is tokenize(line)."""
+    delimiter or by the end of the line. tokens is tokenize(line).
+
+    The run may also start one character into a token: after the '-' that the sign rule
+    (S2.2) absorbed into a number, or after the escape letter t, n or r of a token that
+    follows a backslash, where the encoder starts an IPv4 address at its first digit."""
     starts = set()
+    inner = set()
     position = 0
+    previous = None
     for token in tokens:
         starts.add(position)
+        text = token.text
+        if len(text) > 1 and text[1:2].isdigit():
+            if text[0] == "-" or (text[0] in "tnr" and previous is not None and previous.text == "\\"):
+                inner.add(position + 1)
+        previous = token
         position += len(token.text)
     ends = {start for start in starts if start} | {position}
+    starts |= inner
     at = line.find(value)
     while at != -1:
         end = at + len(value)
@@ -161,11 +173,18 @@ def check_tokenizer(encoded, templates, timezone_offset_minutes, stats=None):
     lines = 0
     refused = 0
     for line in encoded:
+        if not line.startswith(LINE_PREFIX):
+            # spec S4.1: not an encoded line; it carries no values.
+            continue
         rebuilt = decode(line, templates, timezone_offset_minutes=timezone_offset_minutes)
         if rebuilt is None:
             refused += 1
             continue
         split = line[1:].find(",")
+        if split == -1:
+            # spec S8.2: the template hash alone, a line with no values.
+            lines += 1
+            continue
         values = line[1 + split + 1 :].split(",")
         segments, timestamps = parse_template(templates[line[1 : 1 + split]])
         tokens = tokenize(rebuilt)
@@ -185,7 +204,9 @@ def check_tokenizer(encoded, templates, timezone_offset_minutes, stats=None):
 
 
 def read_lines(path):
-    text = path.read_text(encoding="utf-8")
+    # bytes decoded as they are: a text-mode read would turn CR LF into LF and a lone CR
+    # into a line break, and an encoder keeps the CR of a CR LF inside an event.
+    text = path.read_bytes().decode("utf-8")
     lines = text.split("\n")
     if lines and lines[-1] == "":
         lines.pop()
