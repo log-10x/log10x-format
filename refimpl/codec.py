@@ -442,6 +442,7 @@ def decode(
 # --- spec S7: timestamps -----------------------------------------------------
 
 _MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 _EPOCH_PASSTHROUGH = {"epoch", "epochNano", "+%s", "+%s.%N"}
 
 #: spec S4.4. 2029-12-31T12:00:00Z expressed in milliseconds. A timestamp value above
@@ -519,6 +520,12 @@ def render_timestamp(value: str, fmt: str, timezone_offset_minutes: int = 0) -> 
             )
         elif ch == "d":
             out.append(f"{when.day:02d}" if run >= 2 else str(when.day))
+        elif ch == "E":
+            # Day of the week, as DateTimeFormatter writes it in English: one to three
+            # letters the short name (Tue), four the full name (Tuesday), five the first
+            # letter (T).
+            day = _DAYS[when.weekday()]
+            out.append(day[:3] if run <= 3 else (day if run == 4 else day[:1]))
         elif ch in ("H", "h", "m", "s"):
             # DateTimeFormatter: one letter writes the number without padding (5),
             # more letters pad it to that width (05).
