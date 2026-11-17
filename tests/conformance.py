@@ -27,7 +27,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from refimpl import decode, hash_template, tokenize  # noqa: E402
-from refimpl.codec import parse_template  # noqa: E402
+from refimpl.codec import LINE_PREFIX, VALUE_DELIMITER, parse_template  # noqa: E402
 
 BASE = "https://github.com/log-10x/config/releases/download/otel-sample-v1/"
 FILES = {
@@ -56,6 +56,31 @@ def fetch():
         with gzip.open(gz, "rb") as src, target.open("wb") as dst:
             shutil.copyfileobj(src, dst)
         gz.unlink()
+
+
+def why_not_decoded(line, templates):
+    """Name why decode() returned None for an encoded line.
+
+    decode() refuses a line in three cases: the template is not in the map, a
+    back-reference in the template reaches before its first value, or the line carries
+    fewer values than the template's slots need (timestamps lead the value list, spec
+    S6.2). Only the first is a missing template.
+    """
+    body = line[len(LINE_PREFIX) :]
+    split = body.find(VALUE_DELIMITER)
+    template = templates.get(body[:split])
+    if template is None:
+        return "template not found"
+    segments, timestamp_count = parse_template(template)
+    indexes = [segment[1] for segment in segments if segment[0] == "value"]
+    if any(index is None for index in indexes):
+        return "template back-reference reaches before its first value"
+    needed = timestamp_count + max(indexes, default=-1) + 1
+    carried = len(body[split + 1 :].split(VALUE_DELIMITER))
+    if carried < needed:
+        noun = "value" if carried == 1 else "values"
+        return f"short value list: the line carries {carried} {noun}, its template needs {needed}"
+    return "not decoded"
 
 
 def read_lines(path):
@@ -90,7 +115,7 @@ def main():
     for line in encoded:
         rebuilt = decode(line, templates, timezone_offset_minutes=SAMPLE_TZ_OFFSET_MINUTES)
         if rebuilt is None:
-            failures.append((line[:80], "template not found"))
+            failures.append((line[:80], why_not_decoded(line, templates)))
             continue
         parts = rebuilt.split("\n")
         matched = all(
