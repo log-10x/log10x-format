@@ -293,9 +293,38 @@ milliseconds with a fraction, such as `1705313472123.456`, as `$(+%s.%N)` and wr
 text it read as the value, fraction and leading zeros included: `1705313472123.000456`
 stays `1705313472123.000456`. A decoder writes that text back. Parsing it into one number
 loses the dot (`1705313472123456`) and, past six fraction digits, overflows a 64-bit
-integer. An epoch in seconds with a fraction (`1705313472.123456`) is not read as a
-timestamp; it is two values, `$.$`. **[STATED]** `epoch` and `epochNano` are treated the
-same way.
+integer. **[STATED]** `epoch` and `epochNano` are treated the same way.
+
+**[MEASURED]** `+%s.%f` names seconds since the epoch with a fraction. The encoder gives
+this slot to a token of exactly 10 digits whose value is a second from `946713600` up to,
+not including, `1893412800` (about 2000 to 2029), immediately followed by `.` and a token
+of 1 to 9 digits, and writes the text it read as the value, the fraction's leading and
+trailing zeros included. The audit record
+`type=SYSCALL msg=audit(1723042099.699:13369): arch=c000003e syscall=59` is encoded with
+the template `type=SYSCALL msg=audit($(+%s.%f):$): arch=$ syscall=$` and the compact line
+`~Q<C9E6L.6o,1723042099.699,13369,c000003e,59`; `ts=1705313472.123 msg=hello` with
+`ts=$(+%s.%f) msg=hello` and `~IE{DdzvP[H,1705313472.123`. A 10-digit number with no dot
+and fraction digits after it is not a timestamp. The three epoch names differ in what the
+digits before the dot count:
+
+| pattern | value | digits before the dot |
+|---|---|---|
+| `+%s` | an integer epoch, digits only | milliseconds, or nanoseconds by the magnitude rule above |
+| `+%s.%N` | the text read, such as `1705313472123.456` | milliseconds, then a fraction of a millisecond |
+| `+%s.%f` | the text read, such as `1723042099.699` | seconds, then a fraction of a second |
+
+A decoder writes the value of `+%s.%f` back verbatim, as it does for `+%s.%N`:
+`1723042099.600` stays `1723042099.600` and `1723042099.6` stays `1723042099.6`.
+
+The event time of a `+%s.%f` value is read from its digits. The value must match
+`^[0-9]{10}\.[0-9]{1,9}$`; with `S` the 10 digits and `F` the `d` fraction digits, the
+time is `S + F / 10^d` seconds, or `S × 10^9 + F × 10^(9−d)` nanoseconds:
+`1723042099.699` is 2024-08-07T14:48:19.699Z and `1705313472.022663733` is
+2024-01-15T10:11:12.022663733Z. The time of a `+%s.%N` value is its milliseconds and the
+fraction of a millisecond: `1705313472123.456` is 2024-01-15T10:11:12.123456Z. The
+magnitude rule never applies to either: `1723042099.6` joined into `17230420996` and read
+as milliseconds is a date in 1970. A value that does not match gives no time and is still
+written back verbatim. `epoch_time_ns` in the reference implementation reads these times.
 
 **[MEASURED]** Escaping does not apply inside a timestamp format. Six published templates
 carry a bare `/` within a `$(...)` body, as in `$(yyyy/MM/dd HH:mm:ss)`. An implementation

@@ -26,6 +26,7 @@ Two identities come out of one line, and they answer different questions:
 """
 
 import base64
+import re
 import struct
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence, Set
@@ -443,7 +444,10 @@ def decode(
 
 _MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 _DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-_EPOCH_PASSTHROUGH = {"epoch", "epochNano", "+%s", "+%s.%N"}
+_EPOCH_PASSTHROUGH = {"epoch", "epochNano", "+%s", "+%s.%N", "+%s.%f"}
+
+_SECONDS_FRACTION = re.compile(r"^([0-9]{10})\.([0-9]{1,9})$")
+_MILLIS_FRACTION = re.compile(r"^([0-9]{1,18})(?:\.([0-9]{1,9}))?$")
 
 #: spec S4.4. 2029-12-31T12:00:00Z expressed in milliseconds. A timestamp value above
 #: this is read as nanoseconds since the epoch, at or below it as milliseconds. The
@@ -458,6 +462,37 @@ NANOSECOND_THRESHOLD = 1_893_412_800_000
 #: Widest epoch this renderer will format, in either unit. Anything beyond is returned
 #: unchanged instead of raising out of datetime.
 MAX_RENDERABLE_EPOCH = 4 * 10**18
+
+
+def epoch_time_ns(value: str, fmt: str) -> Optional[int]:
+    """spec S4.4. The event time, in nanoseconds since the epoch, of the value of an epoch
+    slot, or None when the value gives no time.
+
+    `+%s.%f`: 10 digits of seconds, a dot, 1 to 9 fraction digits (`1723042099.6` is
+    1723042099.600 s). `+%s.%N`: milliseconds, then an optional dot and fraction digits of
+    a millisecond; digits past the nanosecond are dropped. Neither is read through the
+    magnitude rule. `+%s`, `epoch`, `epochNano`: an integer epoch, milliseconds or
+    nanoseconds by magnitude.
+    """
+    if fmt == "+%s.%f":
+        m = _SECONDS_FRACTION.match(value)
+        if not m:
+            return None
+        digits = m.group(2)
+        return int(m.group(1)) * 1_000_000_000 + int(digits) * 10 ** (9 - len(digits))
+    if fmt == "+%s.%N":
+        m = _MILLIS_FRACTION.match(value)
+        if not m:
+            return None
+        millis, digits = int(m.group(1)), m.group(2) or ""
+        nanos = int(digits) * 10 ** (6 - len(digits)) if len(digits) <= 6 else int(digits[:6])
+        return millis * 1_000_000 + (nanos if digits else 0)
+    if fmt in ("+%s", "epoch", "epochNano"):
+        if not value or not all("0" <= c <= "9" for c in value):
+            return None
+        epoch = int(value)
+        return epoch if epoch > NANOSECOND_THRESHOLD else epoch * 1_000_000
+    return None
 
 
 def render_timestamp(value: str, fmt: str, timezone_offset_minutes: int = 0) -> str:
