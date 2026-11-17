@@ -205,6 +205,15 @@ line readers do by default, cuts such a line in two.
 
 A line that does not begin with `~` is not encoded and passes through untouched.
 
+**[STATED]** A stream may mix encoded lines with lines that are events written as their
+own text, with no template (an encoder may hold back a template until an event's shape
+recurs). A producer writes every event whose text begins with `~` encoded, so a line
+that begins with `~` is always an encoded line and any other line is an event's own text.
+A reader decides by the first character alone: it never looks up the text before the
+first `,` of a line that does not begin with `~`, even when that text equals a known
+template hash. A stream reader that does not hold the template an encoded line names
+keeps the line as read rather than dropping it.
+
 ### S4.2 Escaping inside a template
 
 **[MEASURED]** Within a template, `/` introduces an escape:
