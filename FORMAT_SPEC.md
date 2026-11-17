@@ -40,25 +40,31 @@ out of scope here and is not described.
 
 ### S2.1 Delimiters
 
-**[MEASURED]** A line is split into tokens on this delimiter set, 28 characters:
+**[MEASURED]** A line is split into tokens on this delimiter set, 29 characters:
 
 ```
-<>|. ][:-+/*=\,{}_();'"$<TAB><LF>@%
+<>|. ][:-+/*=\,{}_();'"$<TAB><LF><CR>@%
 ```
 
 A delimiter is always a token of its own, one character long. Every maximal run of
 non-delimiter characters between two delimiters is one token. Nothing is discarded:
 concatenating every token's text reproduces the line exactly.
 
-**[MEASURED]** caveat: 27 of the 28 characters occur in the published sample and none of
-them ever appears inside a value. TAB does not occur at all, so its membership rests on
-the encoder's configuration rather than on the data. A producer may also join several
+**[MEASURED]** caveat: 27 of the 28 characters other than CR occur in the published
+sample and none of them ever appears inside a value. TAB does not occur at all, so its
+membership rests on the encoder's configuration rather than on the data. CR does not occur
+in the published sample either. It reaches an encoded event in the line break between two
+lines of a grouped event (S8.4), where a line ends before its line break, so a value can end
+right before a CR. **[MEASURED]** A value can also hold a CR: the Receiver, reading a
+forwarder's record, keeps a line of the record that is a CR alone (a Windows blank line
+whose CR the forwarder kept) as the value `\r`, as in the template
+`... created.\n$\nCreator Subject: ...` with that value. A producer may also join several
 tokens into one value (S2.3), and such a value holds delimiters other than `,`.
 
 **[STATED]** The set is configuration, not a constant. A producer may use a different
 one, and a different set gives different tokens, different templates and therefore
-different hashes. The 28 characters above are what produced the published sample and are
-the default an implementation should use. Characters at or above U+007F are never
+different hashes. The 29 characters above are the default an implementation should use;
+the published sample was produced with the same set (it holds no CR). Characters at or above U+007F are never
 delimiters.
 
 ### S2.2 The sign rule
@@ -192,6 +198,10 @@ difference.
 
 `~` marks the line as encoded. The delimiter is `,`. Values appear in the order the
 template consumes them.
+
+Encoded lines are separated by LF. A CR inside a line is data, since a value can hold one
+(S2.1), so a reader splits lines at LF only: a reader that also ends a line at CR, as many
+line readers do by default, cuts such a line in two.
 
 A line that does not begin with `~` is not encoded and passes through untouched.
 
@@ -466,7 +476,16 @@ These follow from S4.1 and are stated so that an implementation does not assume 
    such; the format carries no checksum over the reconstructed line.
 4. **One encoded line may carry several original lines.** A grouping step ahead of the
    encoder can merge a multi-line event, in which case decoding yields text containing
-   newlines. In the published sample 197,430 lines encode to 159,454.
+   newlines. In the published sample 197,430 lines encode to 159,454. The template joins
+   a line to the next with the break the line was read with: LF; CR LF, as in Windows
+   event logs read from a file or sent by a forwarder; or a CR alone, with no LF after it.
+   So `$`, and a timestamp's closing `)`, can be followed by CR, and a CR can be followed
+   by any character. A CR alone still ends a line as LF does, so it never moves an event
+   boundary. The break that ends the event is not part of its template. **[MEASURED]** In
+   two Windows Security samples, 3 of 662 events (754 lines) hold 27 CR LF breaks and each
+   of 7,649 events (15,298 lines) holds one; both decode byte for byte, and with CR in the
+   delimiter set the TOKENIZER check accepts every value of both. A PowerShell script
+   block sample holds 7 CRs alone inside its events; they decode as written.
 
 ## S9. Conformance
 

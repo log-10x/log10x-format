@@ -35,7 +35,7 @@ from .hashes import base84_encode, farm_na64, to_signed64, xxh64
 # --- spec S2: the token model ------------------------------------------------
 
 #: Characters that terminate a token and are themselves emitted as tokens.
-TOKEN_DELIMITERS = frozenset('<>|. ][:-+/*=\\,{}_();\'"$\t\n@%')
+TOKEN_DELIMITERS = frozenset('<>|. ][:-+/*=\\,{}_();\'"$\t\n\r@%')
 
 VAR_PLACEHOLDER = "$"
 VAR_ESCAPE = "/"
