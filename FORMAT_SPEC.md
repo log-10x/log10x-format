@@ -454,12 +454,14 @@ These follow from S4.1 and are stated so that an implementation does not assume 
    no token can contain it, and a value joined from several tokens ends before it (S2.3).
    The encoded line is safe to split on `,` only because of this. An implementation that
    widens the token set must widen the escaping to match, or the round trip breaks.
-2. **Zero values and one empty value are indistinguishable.** An encoded line always
-   carries the delimiter after the template hash, so a line with no values is written
-   `~<hash>,` and splits back into a single empty value. No published line has zero
-   values, and the round trip holds regardless, because a template with no slots never
-   reads one. An implementation should treat the value count as bounded by the template
-   rather than by the split.
+2. **A line with no values is the hash alone.** **[MEASURED]** The Log10x encoder writes
+   an event whose template has no value slot as `~<hash>`, with no delimiter after the
+   hash. A decoder reads such a line as a line with no values when `<hash>` is a known
+   template, and passes it through untouched otherwise. `~<hash>,`, the hash and a single
+   empty value, decodes to the same text, because a template with no slots never reads a
+   value. No published line has zero values; of 2,664 synthetic lines encoded one event
+   per line by engine 1.1.180, 688 are written `~<hash>`. An implementation should treat
+   the value count as bounded by the template rather than by the split.
 3. **A template hash collision would misdecode.** Identity is 64 bits and is accepted as
    such; the format carries no checksum over the reconstructed line.
 4. **One encoded line may carry several original lines.** A grouping step ahead of the
