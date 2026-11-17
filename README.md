@@ -22,6 +22,7 @@ python3 tests/demo.py           # the four properties, offline, about a second
 python3 tests/conformance.py    # checked against 197,430 published log lines
 python3 tests/engine_parity.py  # compared against the pinned encoder, needs docker
 python3 tests/fuzz.py           # the same properties on generated and hostile input
+python3 tests/vectors.py        # the shared reader vectors, offline
 ```
 
 ## What you can check
