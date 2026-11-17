@@ -286,8 +286,16 @@ once the encoder does, and encoded data written before then is unaffected: no ti
 in that window can exist until 2029.
 
 **[MEASURED]** `+%s` means the source text was already an epoch; the value passes through
-unchanged with no arithmetic. **[STATED]** `+%s.%N`, `epoch` and `epochNano` are treated
-the same way. Only `+%s` occurs in the published sample, 39 times.
+unchanged with no arithmetic. Only `+%s` occurs in the published sample, 39 times.
+
+**[MEASURED]** `+%s.%N` is treated the same way. The encoder reads an epoch in
+milliseconds with a fraction, such as `1705313472123.456`, as `$(+%s.%N)` and writes the
+text it read as the value, fraction and leading zeros included: `1705313472123.000456`
+stays `1705313472123.000456`. A decoder writes that text back. Parsing it into one number
+loses the dot (`1705313472123456`) and, past six fraction digits, overflows a 64-bit
+integer. An epoch in seconds with a fraction (`1705313472.123456`) is not read as a
+timestamp; it is two values, `$.$`. **[STATED]** `epoch` and `epochNano` are treated the
+same way.
 
 **[MEASURED]** Escaping does not apply inside a timestamp format. Six published templates
 carry a bare `/` within a `$(...)` body, as in `$(yyyy/MM/dd HH:mm:ss)`. An implementation
