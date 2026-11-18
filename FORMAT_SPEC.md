@@ -396,7 +396,8 @@ slots stay in the template whatever the library holds, so a line whose every tok
 value still has a template, and still has a template hash. A line consisting of one
 unrecognised word gives the template `$`; `x=7` gives `$=$`, the delimiter retained. The
 one input that yields an empty template is an empty line, and that hashes too, to
-`-J}UrlyaKD8`.
+`-J}UrlyaKD8`. Its template record may carry no template text (`null`); a reader decodes
+its encoded line, the hash alone, to an empty line.
 
 The consequence is worth being explicit about, because it is what makes the empty pattern
 safe to emit: an empty pattern costs the line its **name**, never its storage or its
