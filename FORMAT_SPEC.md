@@ -448,6 +448,24 @@ Emit each segment in order: literal text verbatim, a value slot as its value, a 
 slot as its epoch rendered through the slot's pattern (S7). The result is the original
 line.
 
+### S6.4 Line breaks
+
+**[STATED]** A template keeps the line breaks of its event as literal text. Each line of
+an event of several lines is joined to the next with the break it was read with: LF,
+CR LF, or a CR alone. When the event's last line ended at CR LF, the template ends in that
+CR. The LF that ends an event is not in the template. A CR alone that ends an event is not
+kept: the event comes back with LF in its place. An empty line read with CR LF has a
+template that is that CR alone.
+
+A reader writes a template's text as it is, a trailing CR included, and a reader that
+writes each event as a line writes an LF after it. A CR in a template ends the value slot
+or timestamp slot right before it (S6.1). The CR of a line break is never in an event's
+text or values, so the same line read with CR LF and with LF has two templates and the
+same values.
+
+`fixtures/line-end-vectors.json` holds templates, encoded lines and the text each decodes
+to; `tests/vectors.py` checks this implementation against it.
+
 ## S7. Rendering timestamps
 
 ### S7.1 Pattern letters
